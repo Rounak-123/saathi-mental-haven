@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Saathi Mental Health App Design System - Calming & Professional */
+
+@layer base {
+  :root {
+    /* Base colors - Calming palette */
+    --background: 220 30% 98%;
+    --foreground: 215 25% 15%;
+    
+    /* Mental health themed colors */
+    --primary: 214 88% 58%;        /* Calming ocean blue */
+    --primary-light: 214 88% 75%;  /* Light blue for hover states */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 160 84% 39%;      /* Healing green */
+    --secondary-light: 160 60% 90%; /* Very light green background */
+    --secondary-foreground: 0 0% 100%;
+    
+    --accent: 24 95% 53%;          /* Warm coral for CTAs */
+    --accent-light: 24 95% 96%;    /* Light coral background */
+    --accent-foreground: 0 0% 100%;
+    
+    --calm-blue: 214 50% 95%;      /* Very light blue for sections */
+    --soft-green: 160 40% 96%;     /* Very light green for sections */
+    --warm-gray: 220 15% 96%;      /* Neutral background */
+    
+    /* UI colors */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+    
+    --muted: 220 15% 96%;
+    --muted-foreground: 215 16% 47%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 214 88% 58%;
+    
+    --radius: 0.75rem;
+    
+    /* Gradients for mental health theme */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+    --gradient-calm: linear-gradient(180deg, hsl(var(--calm-blue)), hsl(var(--soft-green)));
+    --gradient-hero: linear-gradient(135deg, hsl(214 88% 58%), hsl(160 84% 39%));
+    
+    /* Shadows for depth */
+    --shadow-soft: 0 4px 12px -4px hsl(214 88% 58% / 0.15);
+    --shadow-card: 0 2px 8px -2px hsl(215 25% 15% / 0.08);
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Mental health app specific utility classes */
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+  
+  .gradient-calm { 
+    background: var(--gradient-calm);
+  }
+  
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans;
+    line-height: 1.6;
+  }
+  
+  /* Smooth scrolling for navigation */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Mental health app typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-foreground font-semibold leading-tight;
+  }
+  
+  /* Accessible focus styles */
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2;
+  }
+}
+
+@layer components {
+  /* Mental health themed button variants */
+  .btn-primary {
+    @apply bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-medium shadow-soft transition-smooth;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary hover:bg-secondary/90 text-secondary-foreground px-6 py-3 rounded-xl font-medium shadow-soft transition-smooth;
+  }
+  
+  .btn-accent {
+    @apply bg-accent hover:bg-accent/90 text-accent-foreground px-6 py-3 rounded-xl font-medium shadow-soft transition-smooth;
+  }
+  
+  .btn-ghost {
+    @apply bg-transparent hover:bg-muted text-foreground px-4 py-2 rounded-lg font-medium transition-smooth;
+  }
+  
+  /* Card styles for mental health content */
+  .card-calm {
+    @apply bg-card border border-border rounded-2xl p-6 shadow-card transition-smooth hover:shadow-soft;
+  }
+  
+  .card-feature {
+    @apply bg-gradient-to-br from-calm-blue to-soft-green border-0 rounded-2xl p-6 shadow-card transition-smooth hover:shadow-soft hover:scale-[1.02];
+  }
+}
