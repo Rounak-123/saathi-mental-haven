@@ -4,8 +4,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, MessageCircle, Heart, Clock, Plus, Search, Filter, ThumbsUp, MessageSquare, Shield } from "lucide-react";
+import { Users, MessageCircle, Heart, Plus, Search, Filter, ThumbsUp, MessageSquare, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface Reply {
+  id: string;
+  content: string;
+  author: string;
+  timeAgo: string;
+}
 
 interface Post {
   id: string;
@@ -18,6 +25,7 @@ interface Post {
   isAnonymous: boolean;
   author: string;
   isLiked?: boolean;
+  replyList?: Reply[]; // ✅ Added reply list
 }
 
 const PeerSupport = () => {
@@ -32,7 +40,8 @@ const PeerSupport = () => {
       replies: 8,
       isAnonymous: true,
       author: "Anonymous Student",
-      isLiked: false
+      isLiked: false,
+      replyList: []
     },
     {
       id: "2", 
@@ -44,7 +53,8 @@ const PeerSupport = () => {
       replies: 15,
       isAnonymous: true,
       author: "FirstYear2024",
-      isLiked: true
+      isLiked: true,
+      replyList: []
     },
     {
       id: "3",
@@ -56,7 +66,8 @@ const PeerSupport = () => {
       replies: 22,
       isAnonymous: false,
       author: "QuietStudent",
-      isLiked: false
+      isLiked: false,
+      replyList: []
     },
     {
       id: "4",
@@ -67,8 +78,9 @@ const PeerSupport = () => {
       likes: 31,
       replies: 19,
       isAnonymous: true,
-        author: "Anonymous Student",
-      isLiked: true
+      author: "Anonymous Student",
+      isLiked: true,
+      replyList: []
     }
   ]);
 
@@ -82,6 +94,9 @@ const PeerSupport = () => {
     isAnonymous: true
   });
   const { toast } = useToast();
+
+  const [replyContent, setReplyContent] = useState<{ [key: string]: string }>({}); // ✅ reply input per post
+  const [replyingTo, setReplyingTo] = useState<string | null>(null); // ✅ track which post is being replied to
 
   const categories = [
     "Academic Stress",
@@ -108,6 +123,30 @@ const PeerSupport = () => {
     ));
   };
 
+  const handleReplySubmit = (postId: string) => {
+    if (!replyContent[postId]?.trim()) return;
+
+    const newReply: Reply = {
+      id: Date.now().toString(),
+      content: replyContent[postId],
+      author: "You",
+      timeAgo: "Just now"
+    };
+
+    setPosts(posts.map(post => 
+      post.id === postId 
+        ? { 
+            ...post, 
+            replies: post.replies + 1,
+            replyList: [...(post.replyList || []), newReply]
+          }
+        : post
+    ));
+
+    setReplyContent({ ...replyContent, [postId]: "" });
+    setReplyingTo(null);
+  };
+
   const handleSubmitPost = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPost.title.trim() || !newPost.content.trim() || !newPost.category) {
@@ -129,7 +168,8 @@ const PeerSupport = () => {
       replies: 0,
       isAnonymous: newPost.isAnonymous,
       author: newPost.isAnonymous ? "Anonymous Student" : "You",
-      isLiked: false
+      isLiked: false,
+      replyList: []
     };
 
     setPosts([post, ...posts]);
@@ -329,10 +369,41 @@ const PeerSupport = () => {
                     {post.replies} replies
                   </Button>
                   
-                  <Button variant="ghost" size="sm" className="text-muted-foreground">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-muted-foreground"
+                    onClick={() => setReplyingTo(replyingTo === post.id ? null : post.id)}
+                  >
                     Reply
                   </Button>
                 </div>
+
+                {/* ✅ Reply Section */}
+                {replyingTo === post.id && (
+                  <div className="mt-4 space-y-3">
+                    <Textarea
+                      placeholder="Write your reply..."
+                      value={replyContent[post.id] || ""}
+                      onChange={(e) => setReplyContent({ ...replyContent, [post.id]: e.target.value })}
+                      rows={2}
+                    />
+                    <Button size="sm" className="btn-primary" onClick={() => handleReplySubmit(post.id)}>
+                      Post Reply
+                    </Button>
+                  </div>
+                )}
+
+                {post.replyList && post.replyList.length > 0 && (
+                  <div className="mt-4 pl-4 border-l space-y-2">
+                    {post.replyList.map((reply) => (
+                      <div key={reply.id} className="bg-muted p-2 rounded text-sm">
+                        <span className="font-medium">{reply.author}</span> • {reply.timeAgo}
+                        <p>{reply.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </Card>
           ))}
