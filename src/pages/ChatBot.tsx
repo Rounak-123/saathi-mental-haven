@@ -50,8 +50,12 @@ const ChatBot = () => {
   }, [messages]);
 
   // Scroll to bottom
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
   // Stream AI response
@@ -113,6 +117,7 @@ const ChatBot = () => {
             setMessages(prev => prev.map(m => 
               m.id === botMessageId ? { ...m, content: assistantContent } : m
             ));
+            scrollToBottom();
           }
         } catch {
           // Incomplete JSON, put back and wait for more
