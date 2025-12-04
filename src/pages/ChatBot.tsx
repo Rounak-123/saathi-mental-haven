@@ -1,26 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Send, Bot, User, Heart, AlertTriangle } from "lucide-react";
+import { Send, Bot, User, Heart, AlertTriangle, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: string;
   content: string;
   sender: "user" | "bot";
   timestamp: Date;
-  emotion?: string;
 }
+
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 
 const ChatBot = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [moodResult, setMoodResult] = useState<string | null>(null);
   const [moodEmoji, setMoodEmoji] = useState("🙂");
-  const [language, setLanguage] = useState("en"); // ✅ NEW
+  const [language, setLanguage] = useState("en");
+  const { toast } = useToast();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history from localStorage
+  // Initialize with welcome message
   useEffect(() => {
     const stored = localStorage.getItem("chatHistory");
     if (stored) {
@@ -34,7 +37,7 @@ const ChatBot = () => {
     setMessages([
       {
         id: "1",
-        content: "Hello! I'm Saathi, your mental health support companion. I'm here to listen and provide helpful resources. How are you feeling today?",
+        content: "Hello! I'm Saathi, your AI mental health support companion. I'm here to listen and provide support. How are you feeling today?",
         sender: "bot",
         timestamp: new Date(),
       },
@@ -46,104 +49,141 @@ const ChatBot = () => {
     localStorage.setItem("chatHistory", JSON.stringify(messages));
   }, [messages]);
 
-  // --- Emotion Detection ---
-  const detectEmotion = (message: string): string => {
-    const input = message.toLowerCase();
-    if (input.includes("stress") || input.includes("anxious") || input.includes("worried"))
-      return "anxiety";
-    if (input.includes("sad") || input.includes("depressed") || input.includes("down"))
-      return "sadness";
-    if (input.includes("exam") || input.includes("test") || input.includes("study"))
-      return "academic stress";
-    if (input.includes("lonely") || input.includes("alone") || input.includes("isolated"))
-      return "loneliness";
-    if (input.includes("happy") || input.includes("joy") || input.includes("glad"))
-      return "happy";
-    return "neutral";
+  // Scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Stream AI response
+  const streamChat = async (userMessages: { role: string; content: string }[]) => {
+    const resp = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ messages: userMessages, language }),
+    });
+
+    if (!resp.ok) {
+      const error = await resp.json();
+      throw new Error(error.error || "Failed to get AI response");
+    }
+
+    if (!resp.body) throw new Error("No response body");
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let textBuffer = "";
+    let assistantContent = "";
+    const botMessageId = `bot-${Date.now()}`;
+
+    // Add initial empty bot message
+    setMessages(prev => [...prev, {
+      id: botMessageId,
+      content: "",
+      sender: "bot" as const,
+      timestamp: new Date(),
+    }]);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      textBuffer += decoder.decode(value, { stream: true });
+
+      let newlineIndex: number;
+      while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+        let line = textBuffer.slice(0, newlineIndex);
+        textBuffer = textBuffer.slice(newlineIndex + 1);
+
+        if (line.endsWith("\r")) line = line.slice(0, -1);
+        if (line.startsWith(":") || line.trim() === "") continue;
+        if (!line.startsWith("data: ")) continue;
+
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === "[DONE]") break;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+          if (content) {
+            assistantContent += content;
+            // Update the bot message in real-time
+            setMessages(prev => prev.map(m => 
+              m.id === botMessageId ? { ...m, content: assistantContent } : m
+            ));
+          }
+        } catch {
+          // Incomplete JSON, put back and wait for more
+          textBuffer = line + "\n" + textBuffer;
+          break;
+        }
+      }
+    }
+
+    return assistantContent;
   };
 
-  // --- Send Message ---
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || isTyping) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputMessage,
       sender: "user",
       timestamp: new Date(),
-      emotion: detectEmotion(inputMessage),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage("");
     setIsTyping(true);
 
-    // Simulated bot response
-    setTimeout(() => {
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: getBotResponse(inputMessage),
+    // Prepare conversation history for AI
+    const conversationHistory = messages
+      .filter(m => m.id !== "1") // Exclude initial greeting
+      .map(m => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.content,
+      }));
+
+    conversationHistory.push({ role: "user", content: inputMessage });
+
+    try {
+      await streamChat(conversationHistory);
+      updateMoodEmoji(inputMessage);
+    } catch (error) {
+      console.error("Chat error:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to get response",
+        variant: "destructive",
+      });
+      // Add error message
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        content: language === "hi" 
+          ? "क्षमा करें, कुछ गलत हो गया। कृपया पुनः प्रयास करें।"
+          : "Sorry, something went wrong. Please try again.",
         sender: "bot",
         timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, botResponse]);
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  // --- Bot Reply Rules ---
-  const getBotResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-
-    // Example: Stress
-    if (input.includes("stress") || input.includes("anxious") || input.includes("worried")) {
-      return language === "hi"
-        ? "मैं समझता हूँ कि आप तनाव या चिंता महसूस कर रहे हैं। गहरी साँस लें: 4 सेकंड अंदर और 6 सेकंड बाहर। क्या आप चाहेंगे कि मैं आपको गाइड करूँ?"
-        : "I understand you're feeling stressed or anxious. These feelings are normal. Try deep breathing: inhale for 4 sec, exhale for 6 sec. Would you like me to guide you?";
+  const updateMoodEmoji = (lastMessage: string) => {
+    const content = lastMessage.toLowerCase();
+    if (content.includes("happy") || content.includes("good") || content.includes("great")) {
+      setMoodEmoji("😊");
+    } else if (content.includes("sad") || content.includes("depressed") || content.includes("anxious") || content.includes("stress")) {
+      setMoodEmoji("😔");
+    } else {
+      setMoodEmoji("🙂");
     }
-
-    // Sadness
-    if (input.includes("sad") || input.includes("depressed") || input.includes("down")) {
-      return language === "hi"
-        ? "मैं समझ सकता हूँ कि आप कठिन समय से गुजर रहे हैं। आप अकेले नहीं हैं। किसी से बात करना मददगार हो सकता है — क्या आप काउंसलर की जानकारी चाहते हैं?"
-        : "I hear that you're going through a tough time. You're not alone. Talking to someone can really help — would you like info about counselors?";
-    }
-
-    // Exam / Studies
-    if (input.includes("exam") || input.includes("test") || input.includes("study")) {
-      return language === "hi"
-        ? "परीक्षा का दबाव कठिन हो सकता है! पोमोडोरो तकनीक आज़माएँ (25 मिनट पढ़ाई + 5 मिनट ब्रेक)। क्या आप अपनी देखभाल कर रहे हैं?"
-        : "Exam pressure can be tough! Try the Pomodoro technique (25 min study + 5 min break). Also, don’t forget rest & food. Are you taking care of yourself?";
-    }
-
-    // Loneliness
-    if (input.includes("lonely") || input.includes("alone") || input.includes("isolated")) {
-      return language === "hi"
-        ? "अकेलापन महसूस करना कठिन है। आप हमारे पीयर फ़ोरम में जुड़ सकते हैं। क्या आपके पास कोई भरोसेमंद व्यक्ति है जिससे आप बात कर सकें?"
-        : "Feeling lonely is hard. You can try connecting in our peer forum. Is there anyone you trust to talk to?";
-    }
-
-    // Happiness
-    if (input.includes("happy") || input.includes("joy") || input.includes("glad")) {
-      return language === "hi"
-        ? "यह सुनकर बहुत अच्छा लगा! 😊 खुश रहिए और सकारात्मक ऊर्जा फैलाइए!"
-        : "That’s wonderful to hear! 😊 Keep enjoying the good vibes and spreading positivity!";
-    }
-
-    // Gratitude
-    if (input.includes("thank") || input.includes("grateful") || input.includes("appreciate")) {
-      return language === "hi"
-        ? "मुझे खुशी है कि मैं मदद कर सका 💙। याद रखिए, आप सहायता लेकर बहुत अच्छा कर रहे हैं!"
-        : "I'm glad I could help 💙. Remember, you're doing great by seeking support!";
-    }
-
-    // Default Fallback
-    return language === "hi"
-      ? "आपके विचार साझा करने के लिए धन्यवाद। हर किसी का अनुभव अलग होता है — क्या आप और बता सकते हैं?"
-      : "Thanks for sharing 💙. Everyone’s journey is unique — can you tell me more about what’s on your mind?";
   };
 
-  // Quick Responses
   const quickResponses = [
     "I'm feeling anxious about exams",
     "I'm having trouble sleeping",
@@ -152,77 +192,19 @@ const ChatBot = () => {
     "I'm feeling happy today 😊",
   ];
 
-  // Clear Chat
   const clearChat = () => {
     localStorage.removeItem("chatHistory");
     setMessages([
       {
         id: "1",
-        content:
-          "Hello! I'm Saathi, your mental health support companion. I'm here to listen and provide helpful resources. How are you feeling today?",
+        content: language === "hi"
+          ? "नमस्ते! मैं साथी हूं, आपका AI मानसिक स्वास्थ्य सहायता साथी। आज आप कैसा महसूस कर रहे हैं?"
+          : "Hello! I'm Saathi, your AI mental health support companion. How are you feeling today?",
         sender: "bot",
         timestamp: new Date(),
       },
     ]);
-  };
-
-  // Analyze Mood (text summary)
-  const analyzeMood = (history: Message[]) => {
-    const counts: Record<string, number> = {};
-    history.forEach((m) => {
-      if (m.sender !== "user") return;
-      const e = m.emotion || "neutral";
-      counts[e] = (counts[e] || 0) + 1;
-    });
-    const totalUser = history.filter((h) => h.sender === "user").length || 1;
-    let summary = `User messages: ${totalUser}\n\nEmotion counts:\n`;
-    Object.entries(counts).forEach(([k, v]) => (summary += `${k}: ${v}\n`));
-    const anxiety = counts["anxiety"] || 0;
-    const sadness = counts["sadness"] || 0;
-    if (anxiety + sadness >= 3)
-      summary += `\n⚠ Suggestion: User may be under elevated distress. Consider counselor support.`;
-    return summary;
-  };
-
-  // --- Mood Emoji (overall) ---
-  const analyzeMoodEmoji = (history: Message[]): string => {
-    if (history.length === 0) return "🙂";
-
-    const userMsgs = history.filter(m => m.sender === "user");
-    let score = 0;
-
-    userMsgs.forEach(m => {
-      if (m.emotion === "sadness" || m.emotion === "anxiety" || m.emotion === "loneliness") {
-        score -= 1;
-      }
-      if (m.emotion === "academic stress") {
-        score -= 0.5;
-      }
-      if (m.emotion === "happy") {
-        score += 2;
-      }
-    });
-
-    if (score > 1) return "😊";
-    if (score === 1) return "🙂";
-    if (score < 0) return "😔";
-    return "😐";
-  };
-
-  // Update emoji whenever messages change
-  useEffect(() => {
-    setMoodEmoji(analyzeMoodEmoji(messages));
-  }, [messages]);
-
-  // Export Chat
-  const exportChatJSON = () => {
-    const dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(JSON.stringify(messages, null, 2));
-    const a = document.createElement("a");
-    a.href = dataStr;
-    a.download = `saathi_chat_${Date.now()}.json`;
-    a.click();
+    setMoodEmoji("🙂");
   };
 
   return (
@@ -237,8 +219,7 @@ const ChatBot = () => {
             <h1 className="text-3xl font-bold text-foreground">Talk to Saathi</h1>
           </div>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Your AI mental health companion is here to listen and provide support. Share what's on
-            your mind in a safe, judgment-free space.
+            Your AI mental health companion powered by advanced AI. Share what's on your mind in a safe, judgment-free space.
           </p>
         </div>
 
@@ -282,13 +263,7 @@ const ChatBot = () => {
                       : "bg-muted text-foreground"
                   }`}
                 >
-                  <p className="text-sm leading-relaxed">{message.content}</p>
-                  {message.sender === "user" && message.emotion && (
-                    <p className="text-xs opacity-70 mt-1">
-                      Emotion: {message.emotion}{" "}
-                      {message.emotion === "happy" ? "😊" : ""}
-                    </p>
-                  )}
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   <p className="text-xs opacity-70 mt-1">
                     {new Date(message.timestamp).toLocaleTimeString([], {
                       hour: "2-digit",
@@ -304,26 +279,17 @@ const ChatBot = () => {
               </div>
             ))}
 
-            {isTyping && (
+            {isTyping && messages[messages.length - 1]?.sender !== "bot" && (
               <div className="flex gap-3 justify-start">
                 <div className="w-8 h-8 bg-gradient-primary rounded-full flex items-center justify-center">
                   <Heart className="w-4 h-4 text-white" />
                 </div>
                 <div className="bg-muted p-4 rounded-2xl">
-                  <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"></div>
-                    <div
-                      className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                      style={{ animationDelay: "0.4s" }}
-                    ></div>
-                  </div>
+                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Quick Responses */}
@@ -345,31 +311,17 @@ const ChatBot = () => {
           </div>
 
           {/* Actions Row */}
-          <div className="flex gap-3 px-6 pb-4 items-center">
+          <div className="flex gap-3 px-6 pb-4 items-center flex-wrap">
             <Button variant="outline" onClick={clearChat}>Clear Chat</Button>
-            <Button variant="outline" onClick={() => setMoodResult(analyzeMood(messages))}>
-              Analyze Mood
-            </Button>
-            <Button variant="outline" onClick={exportChatJSON}>Export Chat</Button>
-
-            {/* ✅ NEW Language Dropdown */}
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="border rounded px-2 py-1 text-sm"
+              className="border rounded px-2 py-1 text-sm bg-background"
             >
               <option value="en">English</option>
               <option value="hi">हिन्दी</option>
             </select>
           </div>
-
-          {moodResult && (
-            <div className="px-6 pb-4">
-              <Card className="bg-muted p-3 text-sm">
-                <p>{moodResult}</p>
-              </Card>
-            </div>
-          )}
 
           {/* Input */}
           <div className="border-t border-border p-6">
@@ -377,9 +329,10 @@ const ChatBot = () => {
               <Input
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Type your message here..."
+                placeholder={language === "hi" ? "अपना संदेश यहाँ लिखें..." : "Type your message here..."}
                 onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                 className="flex-1"
+                disabled={isTyping}
               />
               <Button onClick={handleSendMessage} disabled={!inputMessage.trim() || isTyping}>
                 <Send className="w-4 h-4" />
