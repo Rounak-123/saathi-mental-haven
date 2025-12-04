@@ -21,7 +21,7 @@ const ChatBot = () => {
   const [moodEmoji, setMoodEmoji] = useState("🙂");
   const [language, setLanguage] = useState("en");
   const { toast } = useToast();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Initialize with welcome message
   useEffect(() => {
@@ -49,9 +49,11 @@ const ChatBot = () => {
     localStorage.setItem("chatHistory", JSON.stringify(messages));
   }, [messages]);
 
-  // Scroll to bottom
+  // Scroll to bottom of chat container only
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
@@ -250,7 +252,7 @@ const ChatBot = () => {
 
         {/* Chat Interface */}
         <Card className="card-calm">
-          <div className="h-96 overflow-y-auto p-6 space-y-4">
+          <div ref={chatContainerRef} className="h-96 overflow-y-auto p-6 space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -294,7 +296,7 @@ const ChatBot = () => {
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            
           </div>
 
           {/* Quick Responses */}
