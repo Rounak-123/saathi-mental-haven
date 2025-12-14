@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle, Calendar, BookOpen, Users, BarChart3, Menu, X } from "lucide-react";
+import { Heart, MessageCircle, Calendar, BookOpen, Users, BarChart3, Menu, X, Smile } from "lucide-react";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -10,6 +10,7 @@ const Header = () => {
   const navLinks = [
     { to: "/", label: "Home", icon: Heart },
     { to: "/chat", label: "Talk to Saathi", icon: MessageCircle },
+    { to: "/mood", label: "Mood Tracker", icon: Smile },
     { to: "/booking", label: "Book Session", icon: Calendar },
     { to: "/resources", label: "Resources", icon: BookOpen },
     { to: "/peer-support", label: "Peer Support", icon: Users },
