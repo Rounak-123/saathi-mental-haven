@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Trash2, Calendar, TrendingUp } from "lucide-react";
+// MoodTracker page UI
 
 interface MoodEntry {
   id: string;
