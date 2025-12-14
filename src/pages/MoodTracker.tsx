@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Trash2, Calendar, TrendingUp } from "lucide-react";
 
@@ -32,12 +31,36 @@ const MoodTracker = () => {
   const [selectedMood, setSelectedMood] = useState<typeof moods[0] | null>(null);
   const [notes, setNotes] = useState("");
   const [entries, setEntries] = useState<MoodEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchEntries();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session?.user) {
+          setIsAuthenticated(true);
+          setTimeout(() => fetchEntries(), 0);
+        } else {
+          setIsAuthenticated(false);
+          setIsLoading(false);
+        }
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAuthenticated(true);
+        fetchEntries();
+      } else {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchEntries = async () => {
@@ -149,15 +172,28 @@ const MoodTracker = () => {
 
   const stats = getMoodStats();
 
+  if (!isAuthenticated && !isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-md text-center">
+        <Card className="p-8 card-calm">
+          <h2 className="text-2xl font-bold mb-4">Sign in to Track Your Mood</h2>
+          <p className="text-muted-foreground mb-6">
+            Create an account or sign in to start logging your daily moods and see your emotional patterns.
+          </p>
+          <Button onClick={() => navigate("/auth")} className="w-full">
+            Sign In / Sign Up
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
-      <Header />
-      
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Mood Tracker
-          </h1>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-foreground mb-2">
+          Mood Tracker
+        </h1>
           <p className="text-muted-foreground">
             Track your emotional journey, one day at a time
           </p>
@@ -277,11 +313,8 @@ const MoodTracker = () => {
             </div>
           )}
         </div>
-      </main>
-
-      <Footer />
-    </div>
-  );
-};
+      </div>
+    );
+  };
 
 export default MoodTracker;
