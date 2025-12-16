@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle, Calendar, BookOpen, Users, BarChart3, Menu, X, Smile } from "lucide-react";
+import { Heart, MessageCircle, Calendar, BookOpen, Users, BarChart3, Menu, X, Smile, User } from "lucide-react";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -15,6 +15,7 @@ const Header = () => {
     { to: "/resources", label: "Resources", icon: BookOpen },
     { to: "/peer-support", label: "Peer Support", icon: Users },
     { to: "/admin", label: "Analytics", icon: BarChart3 },
+    { to: "/account", label: "Account", icon: User },
   ];
 
   const isActive = (path: string) => location.pathname === path;

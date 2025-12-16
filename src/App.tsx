@@ -13,6 +13,7 @@ import PeerSupport from "./pages/PeerSupport";
 import AdminDashboard from "./pages/AdminDashboard";
 import MoodTracker from "./pages/MoodTracker";
 import Auth from "./pages/Auth";
+import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/peer-support" element={<PeerSupport />} />
               <Route path="/mood" element={<MoodTracker />} />
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/account" element={<Account />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
